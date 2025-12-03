@@ -1,5 +1,6 @@
 package com.beradeep.aiyo.data.remote.ssh
 
+import com.beradeep.aiyo.data.remote.opencode.OpenCodeRepository.Companion.OPENCODE_DEFAULT_PORT
 import com.beradeep.aiyo.domain.model.SshConfig
 import com.jcraft.jsch.JSch
 import com.jcraft.jsch.Session
@@ -42,7 +43,7 @@ class SshTunnelManager @Inject constructor() {
         }
     }
 
-    suspend fun startForwarding(remotePort: Int = 4096): Int = withContext(Dispatchers.IO) {
+    suspend fun startForwarding(remotePort: Int = OPENCODE_DEFAULT_PORT): Int = withContext(Dispatchers.IO) {
         if (session?.isConnected != true) throw IOException("SSH Session not connected")
 
         forwardedPort?.let { return@withContext it }
