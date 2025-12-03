@@ -59,6 +59,13 @@ dependencies {
 
     implementation(libs.mmkv)
 
+    // SSH & SSE
+    implementation(libs.jsch)
+    implementation(libs.okhttp.sse)
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.kotlinx.serialization)
+    implementation("javax.inject:javax.inject:1")
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

@@ -4,6 +4,7 @@ import com.beradeep.aiyo.domain.ApiClient
 import com.beradeep.aiyo.domain.repository.ApiKeyRepository
 import com.beradeep.aiyo.domain.repository.ChatRepository
 import com.beradeep.aiyo.domain.repository.ModelRepository
+import com.beradeep.aiyo.domain.repository.RemoteAgentSession
 import com.beradeep.aiyo.domain.repository.SettingRepository
 import com.beradeep.aiyo.ui.screens.chat.ChatViewModel
 import com.beradeep.aiyo.ui.screens.settings.SettingsViewModel
@@ -17,12 +18,16 @@ constructor(
     apiKeyRepository: ApiKeyRepository,
     chatRepository: ChatRepository,
     modelRepository: ModelRepository,
-    apiClient: ApiClient
+    apiClient: ApiClient,
+    remoteAgentSession: RemoteAgentSession,
+    settingRepository: SettingRepository
 ) : ChatViewModel(
     apiKeyRepository = apiKeyRepository,
     chatRepository = chatRepository,
     modelRepository = modelRepository,
-    apiClient = apiClient
+    apiClient = apiClient,
+    remoteAgentSession = remoteAgentSession,
+    settingRepository = settingRepository
 )
 
 @HiltViewModel

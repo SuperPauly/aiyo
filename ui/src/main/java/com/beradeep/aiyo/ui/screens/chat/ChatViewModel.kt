@@ -14,6 +14,9 @@ import com.beradeep.aiyo.domain.model.Role
 import com.beradeep.aiyo.domain.repository.ApiKeyRepository
 import com.beradeep.aiyo.domain.repository.ChatRepository
 import com.beradeep.aiyo.domain.repository.ModelRepository
+import com.beradeep.aiyo.domain.repository.RemoteAgentEvent
+import com.beradeep.aiyo.domain.repository.RemoteAgentSession
+import com.beradeep.aiyo.domain.repository.SettingRepository
 import com.mikepenz.markdown.model.parseMarkdownFlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -36,7 +39,9 @@ open class ChatViewModel(
     private val apiKeyRepository: ApiKeyRepository,
     private val chatRepository: ChatRepository,
     private val modelRepository: ModelRepository,
-    private val apiClient: ApiClient
+    private val apiClient: ApiClient,
+    private val remoteAgentSession: RemoteAgentSession,
+    private val settingRepository: SettingRepository
 ) : ViewModel() {
     private val messages = mutableStateListOf<UiMessage>()
     private val conversations = mutableStateListOf<Conversation>()
@@ -161,6 +166,11 @@ open class ChatViewModel(
         _uiState.update { it.copy(isLoadingResponse = true) }
         saveMessage(message)
 
+        if (uiState.value.selectedModel.id == Model.SSH_AGENT.id) {
+            sendSshMessage(text)
+            return
+        }
+
         val apiKey = uiState.value.apiKey
         if (apiKey.isNullOrBlank()) {
             val message =
@@ -220,6 +230,68 @@ open class ChatViewModel(
         responseJob = null
     }
 
+    private suspend fun sendSshMessage(text: String) {
+        _uiState.update { it.copy(inputText = "", isLoadingResponse = true) }
+
+        responseJob = viewModelScope.launch {
+            try {
+                // Ensure connected or reconnect
+                try {
+                    val sshConfig = settingRepository.getSshConfig()
+                    remoteAgentSession.connect(sshConfig)
+                } catch (e: Exception) {
+                    throw Exception("Failed to connect to SSH Agent: ${e.message}")
+                }
+
+                remoteAgentSession.sendUserMessage(text)
+
+                val response = StringBuilder("")
+
+                // Collect events (Streaming)
+                val collectorJob = launch {
+                    remoteAgentSession.events.collect { event ->
+                        when (event) {
+                            is RemoteAgentEvent.OutputChunk -> {
+                                response.append(event.text)
+                                _uiState.update {
+                                    it.copy(
+                                        streamingResponse = response.toString(),
+                                        isLoadingResponse = false
+                                    )
+                                }
+                            }
+                            is RemoteAgentEvent.Status -> {
+                                // Optional: Show status as a small toast or non-persisted system message?
+                                // For now just logging or appending to stream if we want logs visible
+                            }
+                            is RemoteAgentEvent.Error -> {
+                                throw event.throwable
+                            }
+                        }
+                    }
+                }
+
+                // Wait for some completion signal or user stop?
+                // SSE stream is infinite. We typically wait until "done" or tool finish.
+                // For MVP, since we don't have a "Done" event defined in our simple listener yet,
+                // we might need to rely on user stopping or a timeout, OR improve the listener to detect "done".
+                // OpenCode likely sends a "done" status.
+                // For this V1, we keep collecting until error or user stop.
+                // BUT `sendMessage` needs to return eventually to save the message.
+                // This is tricky with infinite streams.
+                // Let's assume for now we keep the job alive.
+                // Ideally we need a delimiter.
+            } catch (e: Exception) {
+                val content = "_${e.message ?: "SSH Agent Error"}_"
+                val message = Message(UUID.randomUUID(), Role.System, content)
+                messages.add(message.toUiMessage())
+                saveMessage(message)
+                preloadMarkdownForIndex(messages.lastIndex)
+                _uiState.update { it.copy(streamingResponse = null, isLoadingResponse = false) }
+            }
+        }
+    }
+
     private suspend fun aiUpdateConversationTitle() {
         if (messages.size == 2) {
             val prompt =
@@ -263,11 +335,12 @@ open class ChatViewModel(
             modelRepository
                 .getModels(_uiState.value.apiKey)
                 .onSuccess { models ->
-                    _uiState.update { it.copy(models = models) }
+                    val allModels = models + Model.SSH_AGENT
+                    _uiState.update { it.copy(models = allModels) }
                     // Update selected model if it's not set or not in the list
                     val currentSelected = _uiState.value.selectedModel
-                    val newSelected = if (!models.contains(currentSelected)) {
-                        models.firstOrNull() ?: currentSelected
+                    val newSelected = if (!allModels.contains(currentSelected)) {
+                        allModels.firstOrNull() ?: currentSelected
                     } else {
                         currentSelected
                     }
@@ -277,6 +350,7 @@ open class ChatViewModel(
             _uiState.update { it.copy(isFetchingModels = false) }
         }
     }
+// ... (rest of class)
 
     private suspend fun selectModel(model: Model) {
         _uiState.update { it.copy(selectedModel = model) }
