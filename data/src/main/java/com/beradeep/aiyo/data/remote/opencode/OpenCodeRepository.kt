@@ -33,6 +33,12 @@ class OpenCodeRepository @Inject constructor(
     private var okHttpClient: OkHttpClient? = null
     private var currentSessionId: String? = null
     private var baseUrl: String? = null
+    private var activeEventSource: EventSource? = null
+
+    companion object {
+        /** Default port for OpenCode server API */
+        const val OPENCODE_DEFAULT_PORT = 4096
+    }
 
     override val events: Flow<RemoteAgentEvent> = callbackFlow {
         val client = okHttpClient ?: throw IllegalStateException("Not connected")
@@ -68,9 +74,11 @@ class OpenCodeRepository @Inject constructor(
         }
 
         val eventSource = EventSources.createFactory(client).newEventSource(request, listener)
+        activeEventSource = eventSource
 
         awaitClose {
             eventSource.cancel()
+            activeEventSource = null
         }
     }
 
@@ -80,7 +88,7 @@ class OpenCodeRepository @Inject constructor(
                 sshTunnelManager.connect(config)
             }
 
-            val localPort = sshTunnelManager.startForwarding(4096) // Default OpenCode port
+            val localPort = sshTunnelManager.startForwarding(OPENCODE_DEFAULT_PORT)
             baseUrl = "http://127.0.0.1:$localPort/"
 
             okHttpClient = OkHttpClient.Builder()
@@ -105,13 +113,18 @@ class OpenCodeRepository @Inject constructor(
     }
 
     override suspend fun disconnect() {
+        activeEventSource?.cancel()
+        activeEventSource = null
         sshTunnelManager.disconnect()
         api = null
+        okHttpClient = null
+        baseUrl = null
         currentSessionId = null
     }
 
     override suspend fun sendUserMessage(text: String, history: List<Any>) {
         val id = currentSessionId ?: throw IllegalStateException("No active session")
-        api?.sendMessage(id, SendMessageRequest(content = text))
+        val apiInstance = api ?: throw IllegalStateException("API not initialized. Call connect() first.")
+        apiInstance.sendMessage(id, SendMessageRequest(content = text))
     }
 }

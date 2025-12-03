@@ -267,7 +267,8 @@ open class ChatViewModel(
                     }
                 }
             } catch (e: Exception) {
-                val content = "_${e.message ?: "SSH Agent Error"}_"
+                val errorType = e::class.simpleName ?: "Error"
+                val content = "_${errorType}: ${e.message ?: "SSH Agent Error"}_"
                 // Only add error message if we haven't received a partial response
                 if (response.isEmpty()) {
                     val message = Message(UUID.randomUUID(), Role.System, content)
