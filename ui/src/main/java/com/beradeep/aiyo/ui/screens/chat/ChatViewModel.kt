@@ -184,8 +184,7 @@ open class ChatViewModel(
         _uiState.update { it.copy(inputText = "", isLoadingResponse = true) }
         responseJob = viewModelScope.launch {
             val model =
-                uiState.value.selectedModel.takeIf { !uiState.value.isWebSearchEnabled }
-                    ?: uiState.value.selectedModel.copy(id = uiState.value.selectedModel.id + ":online")
+                uiState.value.selectedModel.takeIf { !uiState.value.isWebSearchEnabled } ?: uiState.value.selectedModel.copy(id = uiState.value.selectedModel.id + ":online")
             val result =
                 chatRepository.getChatCompletionFlow(
                     apiKey = apiKey,
@@ -217,7 +216,7 @@ open class ChatViewModel(
                             }
                         }
                 }.onFailure { error ->
-                    val content = "_${error.message ?: "_Oops. An unknown error occurred."}_"
+                    val content = "_${error.message ?: "_Oops. An unknown error occurred."}_ "
                     val message = Message(UUID.randomUUID(), Role.System, content)
                     messages.add(message.toUiMessage())
                     saveMessage(message)
@@ -234,6 +233,7 @@ open class ChatViewModel(
         _uiState.update { it.copy(inputText = "", isLoadingResponse = true) }
 
         responseJob = viewModelScope.launch {
+            val response = StringBuilder("")
             try {
                 // Ensure connected or reconnect
                 try {
@@ -245,48 +245,47 @@ open class ChatViewModel(
 
                 remoteAgentSession.sendUserMessage(text)
 
-                val response = StringBuilder("")
-
                 // Collect events (Streaming)
-                val collectorJob = launch {
-                    remoteAgentSession.events.collect { event ->
-                        when (event) {
-                            is RemoteAgentEvent.OutputChunk -> {
-                                response.append(event.text)
-                                _uiState.update {
-                                    it.copy(
-                                        streamingResponse = response.toString(),
-                                        isLoadingResponse = false
-                                    )
-                                }
+                remoteAgentSession.events.collect { event ->
+                    when (event) {
+                        is RemoteAgentEvent.OutputChunk -> {
+                            response.append(event.text)
+                            _uiState.update {
+                                it.copy(
+                                    streamingResponse = response.toString(),
+                                    isLoadingResponse = false
+                                )
                             }
-                            is RemoteAgentEvent.Status -> {
-                                // Optional: Show status as a small toast or non-persisted system message?
-                                // For now just logging or appending to stream if we want logs visible
-                            }
-                            is RemoteAgentEvent.Error -> {
-                                throw event.throwable
-                            }
+                        }
+                        is RemoteAgentEvent.Status -> {
+                            // Optional: Show status as a small toast or non-persisted system message?
+                            // For now just logging or appending to stream if we want logs visible
+                        }
+                        is RemoteAgentEvent.Error -> {
+                            throw event.throwable
                         }
                     }
                 }
-
-                // Wait for some completion signal or user stop?
-                // SSE stream is infinite. We typically wait until "done" or tool finish.
-                // For MVP, since we don't have a "Done" event defined in our simple listener yet,
-                // we might need to rely on user stopping or a timeout, OR improve the listener to detect "done".
-                // OpenCode likely sends a "done" status.
-                // For this V1, we keep collecting until error or user stop.
-                // BUT `sendMessage` needs to return eventually to save the message.
-                // This is tricky with infinite streams.
-                // Let's assume for now we keep the job alive.
-                // Ideally we need a delimiter.
             } catch (e: Exception) {
                 val content = "_${e.message ?: "SSH Agent Error"}_"
-                val message = Message(UUID.randomUUID(), Role.System, content)
-                messages.add(message.toUiMessage())
-                saveMessage(message)
-                preloadMarkdownForIndex(messages.lastIndex)
+                // Only add error message if we haven't received a partial response
+                if (response.isEmpty()) {
+                    val message = Message(UUID.randomUUID(), Role.System, content)
+                    messages.add(message.toUiMessage())
+                    saveMessage(message)
+                    preloadMarkdownForIndex(messages.lastIndex)
+                } else {
+                    // If we have partial response, append error to it (or just log it)
+                    response.append("\n\n$content")
+                }
+            } finally {
+                // Save the accumulated response when job is cancelled or completes
+                if (response.isNotEmpty()) {
+                    val message = Message(UUID.randomUUID(), Role.Assistant, response.toString())
+                    messages.add(message.toUiMessage())
+                    saveMessage(message)
+                    preloadMarkdownForIndex(messages.lastIndex)
+                }
                 _uiState.update { it.copy(streamingResponse = null, isLoadingResponse = false) }
             }
         }
@@ -347,10 +346,14 @@ open class ChatViewModel(
                     modelRepository.setDefaultModel(newSelected)
                     loadDefaultModel()
                 }
+                .onFailure {
+                    // Ensure SSH Agent is available even if API fails
+                    val allModels = listOf(Model.defaultModel, Model.SSH_AGENT)
+                    _uiState.update { it.copy(models = allModels) }
+                }
             _uiState.update { it.copy(isFetchingModels = false) }
         }
     }
-// ... (rest of class)
 
     private suspend fun selectModel(model: Model) {
         _uiState.update { it.copy(selectedModel = model) }

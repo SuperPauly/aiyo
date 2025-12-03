@@ -48,11 +48,13 @@ class OpenCodeRepository @Inject constructor(
             }
 
             override fun onEvent(eventSource: EventSource, id: String?, type: String?, data: String) {
-                // TODO: Parse exact OpenCode event structure.
-                // For now, assuming data contains text or we need to filter by sessionId.
-                // In a real implementation, we'd parse JSON from 'data'.
-                if (type == "delta") {
-                    trySend(RemoteAgentEvent.OutputChunk(data))
+                // TODO: Parse exact OpenCode event structure (JSON).
+                // For MVP, we handle 'delta' for text and log others.
+                when (type) {
+                    "delta" -> trySend(RemoteAgentEvent.OutputChunk(data))
+                    "tool" -> trySend(RemoteAgentEvent.Status("Tool Usage: $data"))
+                    "status" -> trySend(RemoteAgentEvent.Status(data))
+                    else -> Log.d("OpenCodeRepository", "Unknown event type: $type, data: $data")
                 }
             }
 

@@ -30,7 +30,10 @@ class SshTunnelManager @Inject constructor() {
                 if (!config.isKeyAuth) {
                     setPassword(config.password)
                 }
-                setConfig("StrictHostKeyChecking", "no") // For v1/MVP simplification
+                // TODO: SECURITY CRITICAL: Disabling StrictHostKeyChecking is a significant security risk (MITM).
+                // This is a temporary measure for the MVP to allow easy connection to any host without user interaction.
+                // In a production version, we MUST implement a proper host key verification mechanism (Trust On First Use + UI Dialog).
+                setConfig("StrictHostKeyChecking", "no")
                 connect(30000) // 30s timeout
             }
         } catch (e: Exception) {
