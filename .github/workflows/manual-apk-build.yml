@@ -52,11 +52,15 @@ jobs:
 
       - name: Decode and save signing key
         run: |
-          if [ -z "${{ secrets.SIGNING_KEYSTORE_BASE64 }}" ]; then
-            echo "Error: SIGNING_KEYSTORE_BASE64 secret is required for building signed APKs"
+          SECRET="${{ secrets.SIGNING_KEYSTORE_BASE64 }}"
+          if [ -z "$SECRET" ]; then
+            echo "Error: SIGNING_KEYSTORE_BASE64 secret is EMPTY or MISSING."
+            echo "Please check Settings -> Secrets -> Actions."
             exit 1
           fi
-          echo "${{ secrets.SIGNING_KEYSTORE_BASE64 }}" | base64 --decode > release.keystore
+          echo "Secret found. Length: ${#SECRET}"
+          # Use -di to decode and ignore non-alphabet characters (like newlines)
+          echo "$SECRET" | base64 -di > release.keystore
           echo "SIGNING_KEYSTORE_PATH=$PWD/release.keystore" >> $GITHUB_ENV
 
       - name: Grant execute permission for Gradlew
