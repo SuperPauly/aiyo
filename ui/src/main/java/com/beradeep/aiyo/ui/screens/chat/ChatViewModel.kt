@@ -241,7 +241,7 @@ open class ChatViewModel(
                     val sshConfig = settingRepository.getSshConfig()
                     remoteAgentSession.connect(sshConfig)
                 } catch (e: Exception) {
-                    throw Exception("Failed to connect to SSH Agent: ${e.message}")
+                    throw Exception("Failed to connect to SSH Agent: ${e.message}", e)
                 }
 
                 remoteAgentSession.sendUserMessage(text)

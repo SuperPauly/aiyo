@@ -29,8 +29,8 @@ class OpenCodeRepository @Inject constructor(
     private val sshTunnelManager: SshTunnelManager
 ) : RemoteAgentSession {
 
-    private companion object {
-        const val DEFAULT_REMOTE_PORT = 4096
+    companion object {
+        const val OPENCODE_DEFAULT_PORT = 4096
     }
 
     private var api: OpenCodeApi? = null
@@ -84,7 +84,7 @@ class OpenCodeRepository @Inject constructor(
                 sshTunnelManager.connect(config)
             }
 
-            val localPort = sshTunnelManager.startForwarding(DEFAULT_REMOTE_PORT)
+            val localPort = sshTunnelManager.startForwarding(OPENCODE_DEFAULT_PORT)
             baseUrl = "http://127.0.0.1:$localPort/"
 
             okHttpClient = OkHttpClient.Builder()
