@@ -166,7 +166,7 @@ open class ChatViewModel(
         _uiState.update { it.copy(isLoadingResponse = true) }
         saveMessage(message)
 
-        if (uiState.value.selectedModel.id == Model.SSH_AGENT.id) {
+        if (uiState.value.selectedModel.id == Model.sshAgent.id) {
             sendSshMessage(text)
             return
         }
@@ -230,6 +230,7 @@ open class ChatViewModel(
     }
 
     private suspend fun sendSshMessage(text: String) {
+        responseJob?.cancelAndJoin()
         _uiState.update { it.copy(inputText = "", isLoadingResponse = true) }
 
         responseJob = viewModelScope.launch {
@@ -267,7 +268,7 @@ open class ChatViewModel(
                     }
                 }
             } catch (e: Exception) {
-                val content = "_${e.message ?: "SSH Agent Error"}_"
+                val content = "_${e::class.simpleName}: ${e.message ?: "SSH Agent Error"}_"
                 // Only add error message if we haven't received a partial response
                 if (response.isEmpty()) {
                     val message = Message(UUID.randomUUID(), Role.System, content)
@@ -334,7 +335,7 @@ open class ChatViewModel(
             modelRepository
                 .getModels(_uiState.value.apiKey)
                 .onSuccess { models ->
-                    val allModels = models + Model.SSH_AGENT
+                    val allModels = models + Model.sshAgent
                     _uiState.update { it.copy(models = allModels) }
                     // Update selected model if it's not set or not in the list
                     val currentSelected = _uiState.value.selectedModel
@@ -348,7 +349,7 @@ open class ChatViewModel(
                 }
                 .onFailure {
                     // Ensure SSH Agent is available even if API fails
-                    val allModels = listOf(Model.defaultModel, Model.SSH_AGENT)
+                    val allModels = listOf(Model.defaultModel, Model.sshAgent)
                     _uiState.update { it.copy(models = allModels) }
                 }
             _uiState.update { it.copy(isFetchingModels = false) }

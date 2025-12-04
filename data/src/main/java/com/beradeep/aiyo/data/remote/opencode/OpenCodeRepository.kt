@@ -30,7 +30,6 @@ class OpenCodeRepository @Inject constructor(
 ) : RemoteAgentSession {
 
     companion object {
-        /** Default port for the OpenCode agent service */
         const val OPENCODE_DEFAULT_PORT = 4096
     }
 
@@ -105,6 +104,7 @@ class OpenCodeRepository @Inject constructor(
             currentSessionId = session.id
         } catch (e: Exception) {
             Log.e("OpenCodeRepository", "Connection failed", e)
+            disconnect()
             throw e
         }
     }
@@ -117,6 +117,7 @@ class OpenCodeRepository @Inject constructor(
 
     override suspend fun sendUserMessage(text: String, history: List<Any>) {
         val id = currentSessionId ?: throw IllegalStateException("No active session")
-        api?.sendMessage(id, SendMessageRequest(content = text))
+        val safeApi = api ?: throw IllegalStateException("API not initialized")
+        safeApi.sendMessage(id, SendMessageRequest(content = text))
     }
 }
