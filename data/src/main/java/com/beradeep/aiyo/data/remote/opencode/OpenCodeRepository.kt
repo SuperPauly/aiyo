@@ -29,6 +29,10 @@ class OpenCodeRepository @Inject constructor(
     private val sshTunnelManager: SshTunnelManager
 ) : RemoteAgentSession {
 
+    private companion object {
+        const val DEFAULT_REMOTE_PORT = 4096
+    }
+
     private var api: OpenCodeApi? = null
     private var okHttpClient: OkHttpClient? = null
     private var currentSessionId: String? = null
@@ -80,7 +84,7 @@ class OpenCodeRepository @Inject constructor(
                 sshTunnelManager.connect(config)
             }
 
-            val localPort = sshTunnelManager.startForwarding(4096) // Default OpenCode port
+            val localPort = sshTunnelManager.startForwarding(DEFAULT_REMOTE_PORT)
             baseUrl = "http://127.0.0.1:$localPort/"
 
             okHttpClient = OkHttpClient.Builder()
@@ -100,6 +104,7 @@ class OpenCodeRepository @Inject constructor(
             currentSessionId = session.id
         } catch (e: Exception) {
             Log.e("OpenCodeRepository", "Connection failed", e)
+            disconnect()
             throw e
         }
     }
@@ -112,6 +117,7 @@ class OpenCodeRepository @Inject constructor(
 
     override suspend fun sendUserMessage(text: String, history: List<Any>) {
         val id = currentSessionId ?: throw IllegalStateException("No active session")
-        api?.sendMessage(id, SendMessageRequest(content = text))
+        val safeApi = api ?: throw IllegalStateException("API not initialized")
+        safeApi.sendMessage(id, SendMessageRequest(content = text))
     }
 }

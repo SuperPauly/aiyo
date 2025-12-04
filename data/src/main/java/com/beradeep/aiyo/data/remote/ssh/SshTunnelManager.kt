@@ -57,7 +57,7 @@ class SshTunnelManager @Inject constructor() {
         }
     }
 
-    fun disconnect() {
+    suspend fun disconnect() = withContext(Dispatchers.IO) {
         try {
             forwardedPort = null
             session?.disconnect()

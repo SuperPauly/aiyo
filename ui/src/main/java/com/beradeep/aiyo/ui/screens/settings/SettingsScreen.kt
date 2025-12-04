@@ -214,7 +214,7 @@ private fun SshConfigurationSetting(
             OutlinedTextField(
                 value = config.port.toString(),
                 onValueChange = { value ->
-                    val newPort = value.toIntOrNull() ?: config.port
+                    val newPort = value.toIntOrNull()?.takeIf { it in 1..65535 } ?: config.port
                     onConfigChanged(config.copy(port = newPort))
                 },
                 modifier = Modifier.weight(1f),

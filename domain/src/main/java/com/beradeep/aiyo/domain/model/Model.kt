@@ -17,6 +17,6 @@ data class Model(
 
     companion object {
         val defaultModel = Model("openrouter/auto")
-        val SSH_AGENT = Model("ssh-agent", "Self-Hosted")
+        val sshAgent = Model("ssh-agent", "Self-Hosted")
     }
 }
