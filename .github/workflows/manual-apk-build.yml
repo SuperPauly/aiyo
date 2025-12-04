@@ -1,0 +1,83 @@
+name: Manual APK Build & Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag name for the release (e.g. v1.0.0-beta1)'
+        required: true
+      draft:
+        description: 'Create as draft release?'
+        type: boolean
+        required: true
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate tag name
+        run: |
+          if ! [[ "${{ inputs.tag_name }}" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
+            echo "Error: Invalid tag name format. Expected format: v1.2.3 or v1.2.3-beta1"
+            exit 1
+          fi
+
+      - name: Check if tag exists
+        run: |
+          git fetch --tags
+          if git rev-parse "${{ inputs.tag_name }}" >/dev/null 2>&1; then
+            echo "Error: Tag ${{ inputs.tag_name }} already exists"
+            exit 1
+          fi
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Decode and save signing key
+        run: |
+          if [ -z "${{ secrets.SIGNING_KEYSTORE_BASE64 }}" ]; then
+            echo "Error: SIGNING_KEYSTORE_BASE64 secret is required for building signed APKs"
+            exit 1
+          fi
+          echo "${{ secrets.SIGNING_KEYSTORE_BASE64 }}" | base64 --decode > release.keystore
+          echo "SIGNING_KEYSTORE_PATH=$PWD/release.keystore" >> $GITHUB_ENV
+
+      - name: Grant execute permission for Gradlew
+        run: chmod +x ./gradlew
+
+      - name: Build APK
+        run: ./gradlew assembleGithubRelease
+        env:
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          # SIGNING_KEYSTORE_PATH is picked up from GITHUB_ENV automatically
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ inputs.tag_name }}
+          name: Release ${{ inputs.tag_name }}
+          draft: ${{ inputs.draft }}
+          prerelease: ${{ contains(inputs.tag_name, '-alpha') || contains(inputs.tag_name, '-beta') || contains(inputs.tag_name, '-rc') }}
+          files: |
+            app/build/outputs/apk/githubRelease/app-githubRelease.apk#aiyo.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
