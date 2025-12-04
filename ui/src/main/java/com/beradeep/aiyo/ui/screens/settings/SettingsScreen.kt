@@ -13,9 +13,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.InvertColors
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.ModelTraining
@@ -25,6 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -36,11 +39,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.beradeep.aiyo.domain.model.Model
+import com.beradeep.aiyo.domain.model.SshConfig
 import com.beradeep.aiyo.domain.model.ThemeType
 import com.beradeep.aiyo.ui.AiyoTheme
 import com.beradeep.aiyo.ui.DarkColors
@@ -123,6 +128,24 @@ fun SettingsScreen(
             )
 
             SettingsSection(
+                title = "SSH Agent Configuration",
+                icon = Icons.Filled.Computer
+            ) {
+                SshConfigurationSetting(
+                    config = uiState.sshConfig,
+                    onConfigChanged = { newConfig ->
+                        viewModel.onUiEvent(SettingsUiEvent.OnUpdateSshConfig(newConfig))
+                    }
+                )
+            }
+
+            HorizontalDivider(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp)
+            )
+
+            SettingsSection(
                 title = "Model Configuration",
                 icon = Icons.Filled.ModelTraining
             ) {
@@ -169,6 +192,91 @@ fun SettingsScreen(
                 viewModel.onUiEvent(SettingsUiEvent.OnDismissModelSelectionSheet)
             }
         )
+    }
+}
+
+@Composable
+private fun SshConfigurationSetting(
+    config: SshConfig,
+    onConfigChanged: (SshConfig) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        OutlinedTextField(
+            value = config.host,
+            onValueChange = { onConfigChanged(config.copy(host = it)) },
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text("Host (e.g. 192.168.1.1)") },
+            label = { Text("Host") }
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = config.port.toString(),
+                onValueChange = { value ->
+                    val newPort = value.toIntOrNull()?.takeIf { it in 1..65535 } ?: config.port
+                    onConfigChanged(config.copy(port = newPort))
+                },
+                modifier = Modifier.weight(1f),
+                placeholder = { Text("22") },
+                label = { Text("Port") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            )
+            OutlinedTextField(
+                value = config.username,
+                onValueChange = { onConfigChanged(config.copy(username = it)) },
+                modifier = Modifier.weight(2f),
+                placeholder = { Text("root") },
+                label = { Text("Username") }
+            )
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(text = "Use Private Key Auth")
+            Switch(
+                checked = config.isKeyAuth,
+                onCheckedChange = { onConfigChanged(config.copy(isKeyAuth = it)) }
+            )
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if (config.isKeyAuth) {
+            OutlinedTextField(
+                value = config.privateKey,
+                onValueChange = { onConfigChanged(config.copy(privateKey = it)) },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("-----BEGIN OPENSSH PRIVATE KEY-----") },
+                label = { Text("Private Key") },
+                minLines = 3,
+                maxLines = 8
+            )
+        } else {
+            var isPasswordVisible by remember { mutableStateOf(false) }
+            OutlinedTextField(
+                value = config.password,
+                onValueChange = { onConfigChanged(config.copy(password = it)) },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("Password") },
+                label = { Text("Password") },
+                visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    IconButton(
+                        variant = IconButtonVariant.PrimaryGhost,
+                        onClick = { isPasswordVisible = !isPasswordVisible }
+                    ) {
+                        Icon(
+                            imageVector = if (isPasswordVisible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                            contentDescription = if (isPasswordVisible) "Hide Password" else "Show Password"
+                        )
+                    }
+                }
+            )
+        }
     }
 }
 

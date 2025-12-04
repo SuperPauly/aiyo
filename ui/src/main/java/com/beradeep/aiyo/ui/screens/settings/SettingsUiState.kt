@@ -1,6 +1,7 @@
 package com.beradeep.aiyo.ui.screens.settings
 
 import com.beradeep.aiyo.domain.model.Model
+import com.beradeep.aiyo.domain.model.SshConfig
 import com.beradeep.aiyo.domain.model.ThemeType
 
 data class SettingsUiState(
@@ -9,7 +10,8 @@ data class SettingsUiState(
     val selectedModel: Model,
     val isFetchingModels: Boolean,
     val showModelSelectionSheet: Boolean,
-    val themeType: ThemeType
+    val themeType: ThemeType,
+    val sshConfig: SshConfig
 ) {
     companion object {
         val defaultModel = Model.defaultModel
@@ -19,7 +21,8 @@ data class SettingsUiState(
             selectedModel = defaultModel,
             isFetchingModels = false,
             showModelSelectionSheet = false,
-            themeType = ThemeType.System
+            themeType = ThemeType.System,
+            sshConfig = SshConfig()
         )
     }
 }

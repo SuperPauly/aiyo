@@ -4,6 +4,8 @@ import android.content.Context
 import com.beradeep.aiyo.data.local.db.dao.ConversationDao
 import com.beradeep.aiyo.data.local.db.dao.MessageDao
 import com.beradeep.aiyo.data.remote.DataApiClient
+import com.beradeep.aiyo.data.remote.opencode.OpenCodeRepository
+import com.beradeep.aiyo.data.remote.ssh.SshTunnelManager
 import com.beradeep.aiyo.data.repository.ApiKeyRepositoryImpl
 import com.beradeep.aiyo.data.repository.ChatRepositoryImpl
 import com.beradeep.aiyo.data.repository.ModelRepositoryImpl
@@ -11,6 +13,7 @@ import com.beradeep.aiyo.data.repository.SettingRepositoryImpl
 import com.beradeep.aiyo.domain.repository.ApiKeyRepository
 import com.beradeep.aiyo.domain.repository.ChatRepository
 import com.beradeep.aiyo.domain.repository.ModelRepository
+import com.beradeep.aiyo.domain.repository.RemoteAgentSession
 import com.beradeep.aiyo.domain.repository.SettingRepository
 import dagger.Module
 import dagger.Provides
@@ -48,4 +51,10 @@ object RepositoryModule {
     fun provideSettingsRepository(
         @ApplicationContext context: Context
     ): SettingRepository = SettingRepositoryImpl(context)
+
+    @Provides
+    @Singleton
+    fun provideRemoteAgentSession(
+        sshTunnelManager: SshTunnelManager
+    ): RemoteAgentSession = OpenCodeRepository(sshTunnelManager)
 }

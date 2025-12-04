@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.beradeep.aiyo.domain.ApiClient
 import com.beradeep.aiyo.domain.model.Model
+import com.beradeep.aiyo.domain.model.SshConfig
 import com.beradeep.aiyo.domain.model.ThemeType
 import com.beradeep.aiyo.domain.repository.ApiKeyRepository
 import com.beradeep.aiyo.domain.repository.ModelRepository
@@ -41,6 +42,7 @@ open class SettingsViewModel(
             SettingsUiEvent.OnShowModelSelectionSheet -> showModelSelectionSheet()
             SettingsUiEvent.OnDismissModelSelectionSheet -> dismissModelSelectionSheet()
             is SettingsUiEvent.OnUpdateThemeType -> setThemeType(settingsUiEvent.themeType)
+            is SettingsUiEvent.OnUpdateSshConfig -> updateSshConfig(settingsUiEvent.config)
         }
     }
 
@@ -48,12 +50,19 @@ open class SettingsViewModel(
         loadThemeType()
         loadApiKey()
         loadDefaultModel()
+        loadSshConfig()
         fetchModels()
     }
 
     private fun loadThemeType() {
         viewModelScope.launch {
             _uiState.update { it.copy(themeType = settingsRepository.getThemeType()) }
+        }
+    }
+
+    private fun loadSshConfig() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(sshConfig = settingsRepository.getSshConfig()) }
         }
     }
 
@@ -74,6 +83,13 @@ open class SettingsViewModel(
         viewModelScope.launch {
             settingsRepository.setThemeType(themeType)
             _uiState.update { it.copy(themeType = themeType) }
+        }
+    }
+
+    private fun updateSshConfig(config: SshConfig) {
+        viewModelScope.launch {
+            settingsRepository.saveSshConfig(config)
+            _uiState.update { it.copy(sshConfig = config) }
         }
     }
 

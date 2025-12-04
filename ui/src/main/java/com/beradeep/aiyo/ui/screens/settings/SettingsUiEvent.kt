@@ -1,5 +1,6 @@
 package com.beradeep.aiyo.ui.screens.settings
 
+import com.beradeep.aiyo.domain.model.SshConfig
 import com.beradeep.aiyo.domain.model.ThemeType
 
 sealed class SettingsUiEvent {
@@ -10,4 +11,5 @@ sealed class SettingsUiEvent {
     object OnDismissModelSelectionSheet : SettingsUiEvent()
 
     data class OnUpdateThemeType(val themeType: ThemeType) : SettingsUiEvent()
+    data class OnUpdateSshConfig(val config: SshConfig) : SettingsUiEvent()
 }

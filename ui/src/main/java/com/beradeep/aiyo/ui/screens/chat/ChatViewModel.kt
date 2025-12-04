@@ -14,6 +14,9 @@ import com.beradeep.aiyo.domain.model.Role
 import com.beradeep.aiyo.domain.repository.ApiKeyRepository
 import com.beradeep.aiyo.domain.repository.ChatRepository
 import com.beradeep.aiyo.domain.repository.ModelRepository
+import com.beradeep.aiyo.domain.repository.RemoteAgentEvent
+import com.beradeep.aiyo.domain.repository.RemoteAgentSession
+import com.beradeep.aiyo.domain.repository.SettingRepository
 import com.mikepenz.markdown.model.parseMarkdownFlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -36,7 +39,9 @@ open class ChatViewModel(
     private val apiKeyRepository: ApiKeyRepository,
     private val chatRepository: ChatRepository,
     private val modelRepository: ModelRepository,
-    private val apiClient: ApiClient
+    private val apiClient: ApiClient,
+    private val remoteAgentSession: RemoteAgentSession,
+    private val settingRepository: SettingRepository
 ) : ViewModel() {
     private val messages = mutableStateListOf<UiMessage>()
     private val conversations = mutableStateListOf<Conversation>()
@@ -161,6 +166,11 @@ open class ChatViewModel(
         _uiState.update { it.copy(isLoadingResponse = true) }
         saveMessage(message)
 
+        if (uiState.value.selectedModel.id == Model.sshAgent.id) {
+            sendSshMessage(text)
+            return
+        }
+
         val apiKey = uiState.value.apiKey
         if (apiKey.isNullOrBlank()) {
             val message =
@@ -174,8 +184,7 @@ open class ChatViewModel(
         _uiState.update { it.copy(inputText = "", isLoadingResponse = true) }
         responseJob = viewModelScope.launch {
             val model =
-                uiState.value.selectedModel.takeIf { !uiState.value.isWebSearchEnabled }
-                    ?: uiState.value.selectedModel.copy(id = uiState.value.selectedModel.id + ":online")
+                uiState.value.selectedModel.takeIf { !uiState.value.isWebSearchEnabled } ?: uiState.value.selectedModel.copy(id = uiState.value.selectedModel.id + ":online")
             val result =
                 chatRepository.getChatCompletionFlow(
                     apiKey = apiKey,
@@ -207,7 +216,7 @@ open class ChatViewModel(
                             }
                         }
                 }.onFailure { error ->
-                    val content = "_${error.message ?: "_Oops. An unknown error occurred."}_"
+                    val content = "_${error.message ?: "_Oops. An unknown error occurred."}_ "
                     val message = Message(UUID.randomUUID(), Role.System, content)
                     messages.add(message.toUiMessage())
                     saveMessage(message)
@@ -218,6 +227,69 @@ open class ChatViewModel(
         }
         responseJob?.join()
         responseJob = null
+    }
+
+    private suspend fun sendSshMessage(text: String) {
+        responseJob?.cancelAndJoin()
+        _uiState.update { it.copy(inputText = "", isLoadingResponse = true) }
+
+        responseJob = viewModelScope.launch {
+            val response = StringBuilder("")
+            try {
+                // Ensure connected or reconnect
+                try {
+                    val sshConfig = settingRepository.getSshConfig()
+                    remoteAgentSession.connect(sshConfig)
+                } catch (e: Exception) {
+                    throw Exception("Failed to connect to SSH Agent: ${e.message}")
+                }
+
+                remoteAgentSession.sendUserMessage(text)
+
+                // Collect events (Streaming)
+                remoteAgentSession.events.collect { event ->
+                    when (event) {
+                        is RemoteAgentEvent.OutputChunk -> {
+                            response.append(event.text)
+                            _uiState.update {
+                                it.copy(
+                                    streamingResponse = response.toString(),
+                                    isLoadingResponse = false
+                                )
+                            }
+                        }
+                        is RemoteAgentEvent.Status -> {
+                            // Optional: Show status as a small toast or non-persisted system message?
+                            // For now just logging or appending to stream if we want logs visible
+                        }
+                        is RemoteAgentEvent.Error -> {
+                            throw event.throwable
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                val content = "_${e::class.simpleName}: ${e.message ?: "SSH Agent Error"}_"
+                // Only add error message if we haven't received a partial response
+                if (response.isEmpty()) {
+                    val message = Message(UUID.randomUUID(), Role.System, content)
+                    messages.add(message.toUiMessage())
+                    saveMessage(message)
+                    preloadMarkdownForIndex(messages.lastIndex)
+                } else {
+                    // If we have partial response, append error to it (or just log it)
+                    response.append("\n\n$content")
+                }
+            } finally {
+                // Save the accumulated response when job is cancelled or completes
+                if (response.isNotEmpty()) {
+                    val message = Message(UUID.randomUUID(), Role.Assistant, response.toString())
+                    messages.add(message.toUiMessage())
+                    saveMessage(message)
+                    preloadMarkdownForIndex(messages.lastIndex)
+                }
+                _uiState.update { it.copy(streamingResponse = null, isLoadingResponse = false) }
+            }
+        }
     }
 
     private suspend fun aiUpdateConversationTitle() {
@@ -263,16 +335,22 @@ open class ChatViewModel(
             modelRepository
                 .getModels(_uiState.value.apiKey)
                 .onSuccess { models ->
-                    _uiState.update { it.copy(models = models) }
+                    val allModels = models + Model.sshAgent
+                    _uiState.update { it.copy(models = allModels) }
                     // Update selected model if it's not set or not in the list
                     val currentSelected = _uiState.value.selectedModel
-                    val newSelected = if (!models.contains(currentSelected)) {
-                        models.firstOrNull() ?: currentSelected
+                    val newSelected = if (!allModels.contains(currentSelected)) {
+                        allModels.firstOrNull() ?: currentSelected
                     } else {
                         currentSelected
                     }
                     modelRepository.setDefaultModel(newSelected)
                     loadDefaultModel()
+                }
+                .onFailure {
+                    // Ensure SSH Agent is available even if API fails
+                    val allModels = listOf(Model.defaultModel, Model.sshAgent)
+                    _uiState.update { it.copy(models = allModels) }
                 }
             _uiState.update { it.copy(isFetchingModels = false) }
         }
